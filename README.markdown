@@ -22,8 +22,45 @@ Clients automatically find the logger application running on Mac OS X via Bonjou
 
 ![Desktop Viewer (main window)](https://github.com/fpillet/NSLogger/raw/master/Screenshots/mainwindow.png "Desktop Viewer")
 
-# One-step setup #
-All you have to do is add `LoggerClient.h`, `LoggerClient.m` and `LoggerCommon.h` (as well as add the `CFNetwork.framework` and `SystemConfiguration.framework` frameworks) to your iOS or Mac OS X application, then replace your *NSLog()* calls with *LogMessageCompat()* calls. We recommend using a macro, so you can turn off logs when building the distribution version of your application.
+# CocoaPods Install #
+[CocoaPods](http://cocoapods.org) is a dependency manager for Objective-C, which automates and simplifies the process of using 3rd-party libraries like AFNetworking in your projects.
+
+## Podfile ##
+If your project is configured to use [CocoaPods](http://cocoapods.org), just add this line to your Podfile:
+
+```ruby
+pod "NSLogger"
+```
+
+If you are using frameworks or libraries that may use NSLogger, then you can use the NoStrip variant which forces the linker to keep all NSLogger functions in the final build, even those that your code doesn't use. Since linked in frameworks may dynamically check for the presence of NSLogger functions, this is required as the linker wouldn't see this use.
+
+```ruby
+pod "NSLogger/NoStrip"
+```
+
+## Desktop Viewer ##
+Download the pre-built, signed version of the [NSLogger desktop viewer](https://github.com/fpillet/NSLogger/releases) for OS X.
+
+## Adding logs to you app ##
+A one stop-shopper header file is `<NSLogger/NSLogger.h>`. By importing this header file, you'll be able to add traces to your code this way:
+
+```objective-c
+LoggerApp(1, @"Hello world! Today is: %@", [self myDate]);
+```
+
+## Starting the logger ##
+The `NSLogger.h` will also allow you to start the logger at the begining of your code. To do so, just add the following line to your `main.m` file, at the beginning of your `main()` function:
+
+```objc
+LoggerStartForBuildUser();
+```
+
+In the Preferences of the NSLogger.app desktop viewer, go to the "Network" tab. Type your user name (i.e. $USER) in the "Bonjour service name" text field. This will allow the traces to be received only by the computer of the user who compiled the app (important for team work).
+
+This only work when NSLogger has been added to your project using CocoaPods.
+
+# Project setup #
+When using NSLogger without CocoaPods, add `LoggerClient.h`, `LoggerClient.m` and `LoggerCommon.h` (as well as add the `CFNetwork.framework` and `SystemConfiguration.framework` frameworks) to your iOS or Mac OS X application, then replace your *NSLog()* calls with *LogMessageCompat()* calls. We recommend using a macro, so you can turn off logs when building the distribution version of your application.
 
 # Using the desktop logger #
 Start the NSLogger application on Mac OS X. Your client app must run on a device that is on the same network as your Mac. When it starts logging traces, it will automatically (by default) look for the desktop NSLogger using Bonjour. As soon as traces start coming, a new window will open on your Mac. Advanced users can setup a Remote Host / Port to log from a client to a specific host).
@@ -65,14 +102,13 @@ Apply colors to tags and messages using regular expressions.
 This tool comes from a personal need for a more powerful logger. There are more features planned for inclusion, here is a quick list of what I'm thinking of. Requests and suggestions are welcome.
 
  * Search and search term highlight in Details window
- * Rewrite of the details window
+ * Rewrite of the desktop viewer
  * Support time-based filtering (filter clause based on the time lapse between a previous trace)
  * Pause (buffer logs) and resume sending logs to the logger, in order to eliminate NSLogger's network load from the equation when testing networking code
-
 
 You'll find documentation in the [NSLogger Wiki](https://github.com/fpillet/NSLogger/wiki/)
 
 NSLogger uses parts of [Brandon Walkin's BWToolkit](http://www.brandonwalkin.com/bwtoolkit/), for which source code is included with NSLogger.
 
-NSLogger is Copyright (c) 2010-2013 Florent Pillet, All Rights Reserved, All Wrongs Revenged. Released under the [New BSD Licence](http://www.opensource.org/licenses/bsd-license.php).
+NSLogger is Copyright (c) 2010-2014 Florent Pillet, All Rights Reserved, All Wrongs Revenged. Released under the [New BSD Licence](http://www.opensource.org/licenses/bsd-license.php).
 The NSLogger icon is Copyright (c) [Louis Harboe](http://www.graphicpeel.com)

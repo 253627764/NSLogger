@@ -5,38 +5,30 @@
  * Copyright (c) 2012-2013 Sung-Taek, Kim <stkim1@colorfulglue.com> All Rights
  * Reserved.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
+ * Redistribution and use in source and binary forms, with or without modification,
+ * are permitted provided that the following conditions are met:
  *
- * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
- *
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
- *
- * 3. Any redistribution is done solely for personal benefit and not for any
- *    commercial purpose or for monetary gain
- *
- * 4. No binary form of source code is submitted to App Store℠ of Apple Inc.
- *
- * 5. Neither the name of the Sung-Taek, Kim nor the names of its contributors
- *    may be used to endorse or promote products derived from  this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
- * ANY EXPRESS OR  IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL COPYRIGHT HOLDER AND AND CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
+ * Redistributions of  source code  must retain  the above  copyright notice,
+ * this list of  conditions and the following  disclaimer. Redistributions in
+ * binary  form must  reproduce  the  above copyright  notice,  this list  of
+ * conditions and the following disclaimer  in the documentation and/or other
+ * materials  provided with  the distribution.  Neither the  name of Sung-Tae
+ * k Kim nor the names of its contributors may be used to endorse or promote
+ * products  derived  from  this  software  without  specific  prior  written
+ * permission.  THIS  SOFTWARE  IS  PROVIDED BY  THE  COPYRIGHT  HOLDERS  AND
+ * CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT
+ * NOT LIMITED TO, THE IMPLIED  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+ * A  PARTICULAR PURPOSE  ARE DISCLAIMED.  IN  NO EVENT  SHALL THE  COPYRIGHT
+ * HOLDER OR  CONTRIBUTORS BE  LIABLE FOR  ANY DIRECT,  INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY,  OR CONSEQUENTIAL DAMAGES (INCLUDING,  BUT NOT LIMITED
+ * TO, PROCUREMENT  OF SUBSTITUTE GOODS  OR SERVICES;  LOSS OF USE,  DATA, OR
+ * PROFITS; OR  BUSINESS INTERRUPTION)  HOWEVER CAUSED AND  ON ANY  THEORY OF
+ * LIABILITY,  WHETHER  IN CONTRACT,  STRICT  LIABILITY,  OR TORT  (INCLUDING
+ * NEGLIGENCE  OR OTHERWISE)  ARISING  IN ANY  WAY  OUT OF  THE  USE OF  THIS
+ * SOFTWARE,   EVEN  IF   ADVISED  OF   THE  POSSIBILITY   OF  SUCH   DAMAGE.
  *
  */
+
 
 #import <CoreData/CoreData.h>
 #import <QuartzCore/QuartzCore.h>
@@ -49,9 +41,14 @@
 #import "LoggerConstModel.h"
 #import "LoggerConstView.h"
 
+//#define TEST_SHOW 1
+
 @interface LoggerMessageViewController ()
 @property (nonatomic, retain) NSFetchedResultsController	*messageFetchResultController;
 @property (nonatomic, retain) NSDictionary					*clientInfo;
+@property NSInteger currentRun;
+@property NSInteger runCount;
+@property uLong currentClientHash;
 -(void)readMessages:(NSNotification *)aNotification;
 -(void)insertTableViewSection;
 -(void)deleteTableViewSection;
@@ -72,9 +69,6 @@
 {
 	[super finishViewConstruction];
 
-	[self.navigationController.navigationBar setFrame:(CGRect){{0.f,20.f},{self.view.frame.size.width,VIEWCONTROLLER_TITLE_HEIGHT}}];
-	[self.navigationController.navigationBar addSubview:self.titleBar];
-	
 	[[NSNotificationCenter defaultCenter]
 	 addObserver:self
 	 selector:@selector(readMessages:)
@@ -116,6 +110,26 @@
     self.toolBar.alternateBackgroundColor = [UIColor colorWithRed:0.94 green:0.94 blue:0.94 alpha:1.000];
     self.toolBar.noiseBlendMode = kCGBlendModeMultiply;
     self.toolBar.noiseOpacity = 0.1;
+	
+    NSUserDefaults* defaults = [NSUserDefaults standardUserDefaults];
+    self.currentClientHash = [defaults integerForKey:kClientHash];
+    self.runCount = [defaults integerForKey:kClientRunCount];
+    
+    if (self.currentClientHash != 0 && self.runCount != 0) {
+        self.currentRun = self.runCount;
+        [self enableRunControls];
+        [self fetchDataForRun:self.currentRun
+               withClientHash:self.currentClientHash];
+        [self stopTimer];
+    } else {
+        self.currentRun = -1;
+        self.runCount = -1;
+    }
+    
+#ifdef TEST_SHOW
+	[self readMessages:nil];
+#endif
+    
 }
 
 -(void)startViewDestruction
@@ -141,6 +155,8 @@
 	self.searchBar = nil;
 	self.titleLabel = nil;
 	self.toolBar = nil;
+    self.previousRunButton = nil;
+    self.nextRunButton = nil;
 }
 
 -(void)beginInstanceDestruction
@@ -154,93 +170,119 @@
 //------------------------------------------------------------------------------
 -(void)readMessages:(NSNotification *)aNotification
 {
+#ifdef TEST_SHOW
+	uLong clientHash = 0x48d4119d;
+	int32_t runCount = 26;
+#else
 	NSDictionary *userInfo = [aNotification userInfo];
 	
 	MTLog(@"userInfo %@",userInfo);
 	
-	uLong clientHash = [[userInfo objectForKey:kClientHash] integerValue];
-	int32_t runCount = [[userInfo objectForKey:kClientRunCount] integerValue];
-	
+	self.runCount = [[userInfo objectForKey:kClientRunCount] integerValue];
+    self.currentRun = self.runCount;
+
 	self.clientInfo = nil;
 	self.clientInfo = userInfo;
+    self.currentClientHash = [[userInfo objectForKey:kClientHash] integerValue];
+    
+    NSUserDefaults* defaults = [NSUserDefaults standardUserDefaults];
+    [defaults setInteger: self.currentClientHash forKey:kClientHash];
+    [defaults setInteger: self.runCount forKey:kClientRunCount];
 
-	self.runCountLabel.text = \
-		[NSString stringWithFormat:
-		 NSLocalizedString(@"Run %d of %d", nil),runCount+1,runCount+1];
+#endif
+    
+    [self enableRunControls];
+    [self fetchDataForRun:self.currentRun
+            withClientHash:self.currentClientHash];
+}
 
-	assert([self.dataManager messageDisplayContext] != nil);
-	
-	if(_messageFetchResultController != nil)
-	{
-		self.messageFetchResultController.delegate = nil;
-		self.messageFetchResultController = nil;
-		[self deleteTableViewSection];
-	}
+- (void)enableRunControls
+{
+    self.runCountLabel.text = \
+    [NSString stringWithFormat:
+     NSLocalizedString(@"Run %ld of %ld", nil),self.currentRun+1,self.runCount+1];
+    
+    self.previousRunButton.hidden = self.currentRun <= 0;
+    self.nextRunButton.hidden = self.currentRun >= self.runCount;
+}
 
-	// start timer
-	[self startTimer];
-	
-	// start fetching
-	NSFetchRequest *request = [[NSFetchRequest alloc] init];
-	
-	NSEntityDescription *entity =\
-		[NSEntityDescription
-		 entityForName:@"LoggerMessageData"
-		 inManagedObjectContext:[[self dataManager] messageDisplayContext]];
-	[request setShouldRefreshRefetchedObjects:NO];
-	[request setEntity:entity];
-	[request setFetchBatchSize:20];
-	//[request setFetchLimit:40];
-	//[request setFetchOffset:0];
-	
-	[request setPredicate:
-	 [NSPredicate
-	  predicateWithFormat:
-	  @"clientHash == %d AND runCount == %d"
-	  ,clientHash
-	  ,runCount]];
-	
-	NSSortDescriptor *sortByTimestamp = \
-		[[NSSortDescriptor alloc]
-		 initWithKey:@"timestamp"
-		 ascending:YES];
-	
-	NSSortDescriptor *sortBySequence = \
-		[[NSSortDescriptor alloc]
-		 initWithKey:@"sequence"
-		 ascending:YES];
-	
-	[request setSortDescriptors:@[sortBySequence,sortByTimestamp]];
-	
-	NSString *cacheName = [NSString stringWithFormat:@"Cache-%lx",clientHash];
-	
-	[NSFetchedResultsController deleteCacheWithName:cacheName];
-	
-	NSFetchedResultsController *frc = \
-		[[NSFetchedResultsController alloc]
-		 initWithFetchRequest:request
-		 managedObjectContext:[[self dataManager] messageDisplayContext]
-		 sectionNameKeyPath:nil//@"uniqueID"
-		 cacheName:cacheName];
-	
-	NSError *error = nil;
-	[frc performFetch:&error];
-	
-	// alert tableview to prepare for incoming data
-	// before fetching started, make sure every setup is completed
-	[self setMessageFetchResultController:frc];
-	[frc setDelegate:self];
-	
+- (void)fetchDataForRun:(NSInteger)run
+         withClientHash:(uLong)clientHash
+{
 
-	[self insertTableViewSection];
-	[self.tableView
-	 reloadSections:[NSIndexSet indexSetWithIndex:0]
-	 withRowAnimation:UITableViewRowAnimationNone];
-	
-	[frc release],frc = nil;
-	[sortBySequence release],sortBySequence = nil;
-	[sortByTimestamp release],sortByTimestamp = nil;
-	[request release],request = nil;
+    assert([self.dataManager messageDisplayContext] != nil);
+    
+    if(_messageFetchResultController != nil)
+    {
+        self.messageFetchResultController.delegate = nil;
+        self.messageFetchResultController = nil;
+        [self deleteTableViewSection];
+    }
+    
+    // start timer
+    [self startTimer];
+    
+    // start fetching
+    NSFetchRequest *request = [[NSFetchRequest alloc] init];
+    
+    NSEntityDescription *entity =\
+    [NSEntityDescription
+     entityForName:@"LoggerMessageData"
+     inManagedObjectContext:[[self dataManager] messageDisplayContext]];
+    [request setShouldRefreshRefetchedObjects:NO];
+    [request setEntity:entity];
+    [request setFetchBatchSize:20];
+    //[request setFetchLimit:40];
+    //[request setFetchOffset:0];
+    
+    [request setPredicate:
+     [NSPredicate
+      predicateWithFormat:
+      @"clientHash == %d AND runCount == %d"
+      ,clientHash
+      ,run]];
+    
+    NSSortDescriptor *sortByTimestamp = \
+    [[NSSortDescriptor alloc]
+     initWithKey:@"timestamp"
+     ascending:YES];
+    
+    NSSortDescriptor *sortBySequence = \
+    [[NSSortDescriptor alloc]
+     initWithKey:@"sequence"
+     ascending:YES];
+    
+    [request setSortDescriptors:@[sortBySequence,sortByTimestamp]];
+    
+    NSString *cacheName = [NSString stringWithFormat:@"Cache-%lx",clientHash];
+    
+    [NSFetchedResultsController deleteCacheWithName:cacheName];
+    
+    NSFetchedResultsController *frc = \
+    [[NSFetchedResultsController alloc]
+     initWithFetchRequest:request
+     managedObjectContext:[[self dataManager] messageDisplayContext]
+     sectionNameKeyPath:nil//@"uniqueID"
+     cacheName:cacheName];
+    
+    NSError *error = nil;
+    [frc performFetch:&error];
+    
+    // alert tableview to prepare for incoming data
+    // before fetching started, make sure every setup is completed
+    [self setMessageFetchResultController:frc];
+    [frc setDelegate:self];
+    
+    
+    [self insertTableViewSection];
+    [self.tableView
+     reloadSections:[NSIndexSet indexSetWithIndex:0]
+     withRowAnimation:UITableViewRowAnimationNone];
+    
+    [frc release],frc = nil;
+    [sortBySequence release],sortBySequence = nil;
+    [sortByTimestamp release],sortByTimestamp = nil;
+    [request release],request = nil;
 }
 
 -(void)insertTableViewSection
@@ -261,6 +303,29 @@
 	 deleteSections:indexSet
 	 withRowAnimation:UITableViewRowAnimationAutomatic];
 }
+//------------------------------------------------------------------------------
+#pragma mark Actions
+//------------------------------------------------------------------------------
+- (IBAction)didPressPreviousButton:(id)sender {
+    if (self.currentRun > 0) {
+        self.currentRun--;
+        [self enableRunControls];
+        [self fetchDataForRun:self.currentRun
+               withClientHash:self.currentClientHash];
+        [self stopTimer];
+    }
+}
+
+- (IBAction)didPressNextButton:(id)sender {
+    if (self.currentRun < self.runCount) {
+        self.currentRun++;
+        [self enableRunControls];
+        [self fetchDataForRun:self.currentRun
+               withClientHash:self.currentClientHash];
+        [self stopTimer];
+    }
+}
+
 //------------------------------------------------------------------------------
 #pragma mark Timer Control
 //------------------------------------------------------------------------------
@@ -308,7 +373,8 @@
 - (NSInteger)tableView:(UITableView *)aTableView
  numberOfRowsInSection:(NSInteger)aSection
 {
-	return [[self.messageFetchResultController fetchedObjects] count];
+    NSArray *records = [self.messageFetchResultController fetchedObjects];
+	return [records count];
 }
 
 - (UITableViewCell *)tableView:(UITableView *)aTableView
@@ -397,7 +463,15 @@
 heightForRowAtIndexPath:(NSIndexPath *)anIndexPath
 {
 	LoggerMessageData *data = [self.messageFetchResultController objectAtIndexPath:anIndexPath];
-	return [[data portraitHeight] floatValue];
+	CGFloat h = [[data portraitHeight] floatValue] + [[data portraitFileFuncHeight] floatValue];
+	if([[data truncated] boolValue]){
+		
+		//@@TODO:: find accruate height
+		CGFloat hint = [[data portraitHintHeight] floatValue];
+		h += hint + 100;
+	}
+	
+	return h;
 }
 
 - (CGFloat)tableView:(UITableView *)tableView

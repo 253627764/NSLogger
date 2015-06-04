@@ -29,7 +29,7 @@
  * 
  */
 #import <Security/SecItem.h>
-#import <HockeySDK/BITHockeyManager.h>
+#import <HockeySDK/HockeySDK.h>
 #import "LoggerAppDelegate.h"
 #import "LoggerNativeTransport.h"
 #import "LoggerWindowController.h"
@@ -180,7 +180,7 @@ NSString * const kPref_ApplicationFilterSet = @"appFilterSet";
 	}
 	@catch (NSException * e)
 	{
-		NSLog(@"Catched exception while trying to archive filters: %@", e);
+		NSLog(@"Caught exception while trying to archive filters: %@", e);
 	}
 }
 
@@ -231,11 +231,8 @@ NSString * const kPref_ApplicationFilterSet = @"appFilterSet";
 	if ([hockeyAppID isKindOfClass:[NSString class]] && [hockeyAppID length])
 	{
 		BITHockeyManager *shm = [BITHockeyManager sharedHockeyManager];
-		[shm configureWithIdentifier:hockeyAppID
-						 companyName:[hockeyConf objectForKey:@"companyName"]
-		  crashReportManagerDelegate:self];
+		[shm configureWithIdentifier:hockeyAppID];
 		[shm startManager];
-		[shm setExceptionInterceptionEnabled:YES];
 	}
 	
 	// Listen to prefs change notifications, where we start / stop transports on demand
@@ -246,6 +243,9 @@ NSString * const kPref_ApplicationFilterSet = @"appFilterSet";
 	// Prepare the logger status
 	statusController = [[LoggerStatusWindowController alloc] initWithWindowNibName:@"LoggerStatus"];
 	[statusController showWindow:self];
+
+    // This window is rarely useful. But the best would probably be to open it in case of error.
+    [statusController close];
 
 	/* initialize all supported transports */
 	
@@ -360,6 +360,11 @@ NSString * const kPref_ApplicationFilterSet = @"appFilterSet";
 	if (prefsController == nil)
 		prefsController = [[LoggerPrefsWindowController alloc] initWithWindowNibName:@"LoggerPrefs"];
 	[prefsController showWindow:sender];
+}
+
+- (IBAction)showStatus:(id)sender
+{
+    [statusController.window makeKeyAndOrderFront:nil];
 }
 
 - (void)relaunchApplication
@@ -524,14 +529,6 @@ NSString * const kPref_ApplicationFilterSet = @"appFilterSet";
 	}
 
 	return (serverCerts != NULL);
-}
-
-// -----------------------------------------------------------------------------
-#pragma mark -
-#pragma mark BITCrashReportManagerDelegate
-// -----------------------------------------------------------------------------
-- (void) showMainApplicationWindow
-{
 }
 
 @end

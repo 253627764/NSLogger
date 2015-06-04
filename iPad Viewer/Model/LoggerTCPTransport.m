@@ -106,7 +106,7 @@ void AcceptSocketCallback(CFSocketRef sock, CFSocketCallBackType type, CFDataRef
 		}
 		else
 		{
-			int port = [self tcpPort];
+			NSInteger port = [self tcpPort];
 			shouldRestart = (listenerPort != port);
 		}
 		if (shouldRestart)
@@ -341,9 +341,12 @@ void AcceptSocketCallback(CFSocketRef sock, CFSocketCallBackType type, CFDataRef
 			// The service name is either the one defined in the prefs, of by default
 			// the local computer name (as defined in the sharing prefs panel
 			// (see Technical Q&A QA1228 http://developer.apple.com/library/mac/#qa/qa2001/qa1228.html )
-			NSString *serviceName = [[NSUserDefaults standardUserDefaults] objectForKey:kPrefBonjourServiceName];
-			if (serviceName == nil || ![serviceName isKindOfClass:[NSString class]])
+			//NSString *serviceName = [[NSUserDefaults standardUserDefaults] objectForKey:kPrefBonjourServiceName];
+			NSString *serviceName = [[LoggerPreferenceManager sharedPrefManager] bonjourServiceName];
+			BOOL useDefaultServiceName = (serviceName == nil || ![serviceName isKindOfClass:[NSString class]]);
+			if (useDefaultServiceName)
 				serviceName = @"";
+			
 
 			[bonjourServiceName release];
 			bonjourServiceName = [serviceName retain];
@@ -351,7 +354,13 @@ void AcceptSocketCallback(CFSocketRef sock, CFSocketCallBackType type, CFDataRef
 			bonjourService = [[NSNetService alloc] initWithDomain:@""
 															 type:(NSString *)serviceType
 															 name:(NSString *)serviceName
-															 port:listenerPort];
+															 port:(int)listenerPort];
+			
+			// added in 1.5: let clients know that we have customized our service name and that they should connect to us
+			// only if their own settings match our name
+			if (useDefaultServiceName)
+				[bonjourService setTXTRecordData:[NSNetService dataFromTXTRecordDictionary:@{@"filterClients": @"1"}]];
+			
 			[bonjourService setDelegate:self];
 			[bonjourService publish];
 		}
@@ -443,8 +452,8 @@ void AcceptSocketCallback(CFSocketRef sock, CFSocketCallBackType type, CFDataRef
 
 - (NSString *)description
 {
-	return [NSString stringWithFormat:@"<%@ %p listenerPort=%d publishBonjourService=%d secure=%d>", 
-			[self class], self, listenerPort, (int)publishBonjourService, (int)secure];
+	return [NSString stringWithFormat:@"<%@ %p listenerPort=%ld publishBonjourService=%d secure=%d>", 
+			[self class], self, (long)listenerPort, (int)publishBonjourService, (int)secure];
 }
 
 - (BOOL)canDoSSL
@@ -607,7 +616,7 @@ void AcceptSocketCallback(CFSocketRef sock, CFSocketCallBackType type, CFDataRef
 						NSDictionary *dict = \
 							@{NSLocalizedDescriptionKey:NSLocalizedString(@"NSLogger SSL authentication failure", @"")
 							,NSLocalizedRecoverySuggestionErrorKey:NSLocalizedString(@"Your NSLogger build may not be codesigned. As a result, a conflict between Firewall and Keychain tagging of your viewer requires that you restart NSLogger to complete the SSL certificate authorization.\n\nRestart NSLogger now to fix the issue.", @"")
-							,NSUnderlyingErrorKey:[NSString stringWithFormat:@"CFStream error %d", errCode]
+							,NSUnderlyingErrorKey:[NSString stringWithFormat:@"CFStream error %ld", (long)errCode]
 							,NSLocalizedRecoverySuggestionErrorKey:NSLocalizedString(@"Click the Restart button to restart NSLogger now.", @"")
 							,NSLocalizedRecoveryOptionsErrorKey:[NSArray arrayWithObject:NSLocalizedString(@"Restart", @"")]};
 
@@ -660,7 +669,7 @@ void AcceptSocketCallback(CFSocketRef sock, CFSocketCallBackType type, CFDataRef
 {
 	[self shutdown];
 	
-	int errorCode = [[errorDict objectForKey:NSNetServicesErrorCode] integerValue];
+	NSInteger errorCode = [[errorDict objectForKey:NSNetServicesErrorCode] integerValue];
 	if (errorCode == NSNetServicesCollisionError)
 		self.failureReason = NSLocalizedString(@"Duplicate Bonjour service name on your network", @"");
 	else if (errorCode == NSNetServicesBadArgumentError)

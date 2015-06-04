@@ -809,6 +809,26 @@ static NSArray *sXcodeFileExtensions = nil;
 	[detailsWindowController showWindow:self];
 }
 
+void runSystemCommand(NSString *cmd)
+{
+    [[NSTask launchedTaskWithLaunchPath:@"/bin/sh"
+                              arguments:[NSArray arrayWithObjects:@"-c", cmd, nil]] waitUntilExit];
+}
+
+- (IBAction)openDetailsInExternalEditor:(id)sender
+{
+    NSArray *msgs = [displayedMessages objectsAtIndexes:[logTable selectedRowIndexes]];
+    NSString *txtMsg = [[msgs lastObject] textRepresentation];
+
+    NSString *globallyUniqueStr = [[NSProcessInfo processInfo] globallyUniqueString];
+    NSString *tempPath = [NSTemporaryDirectory() stringByAppendingPathComponent:globallyUniqueStr];
+
+    [txtMsg writeToFile:tempPath atomically:YES encoding:NSUTF8StringEncoding error:nil];
+
+    NSString *cmd = [NSString stringWithFormat:@"open -t %@", tempPath];
+    runSystemCommand(cmd);
+}
+
 - (void)xedFile:(NSString *)path line:(NSString *)line client:(NSString *)client {
     id args = [NSArray arrayWithObjects:
                @"-l",
@@ -821,59 +841,67 @@ static NSArray *sXcodeFileExtensions = nil;
                              arguments:args];
 }
 
-- (void)logCellDoubleClicked:(id)sender
+- (void)openDetailsInIDE
 {
-	// double click opens the source file if it was defined in the log
-	// and the file is found (using alt can mess with the results of the AppleScript)
-    // alt + double click opens the detail view
-	NSEvent *event = [NSApp currentEvent];
-    if ([event clickCount] > 1 && ([NSEvent modifierFlags] & NSAlternateKeyMask) != 0)
-    {
-        [self openDetailsWindow:sender];
-    }
-    else if ([event clickCount] > 1)
-    {
-		NSInteger row = [logTable selectedRow];
-		if (row >= 0 && row < [displayedMessages count])
+	NSInteger row = [logTable selectedRow];
+	if (row >= 0 && row < [displayedMessages count])
+	{
+		LoggerMessage *msg = [displayedMessages objectAtIndex:row];
+		NSString *filename = msg.filename;
+		if ([filename length])
 		{
-			LoggerMessage *msg = [displayedMessages objectAtIndex:row];
-			NSString *filename = msg.filename;
-			if ([filename length])
+			NSFileManager *fm = [[NSFileManager alloc] init];
+			if ([fm fileExistsAtPath:filename])
 			{
-				NSFileManager *fm = [[NSFileManager alloc] init];
-				if ([fm fileExistsAtPath:filename])
+				// If the file is .h, .m, .c, .cpp, .h, .hpp: open the file
+				// using xed. Otherwise, open the file with the Finder. We really don't
+				// know which IDE the user is running if it's not Xcode
+				// (when logging from Android, could be IntelliJ or Eclipse)
+				NSString *extension = [filename pathExtension];
+				BOOL useXcode = NO;
+				//if ([fm fileExistsAtPath:@"/usr/bin/xed"])
+				//{
+				for (NSString *ext in sXcodeFileExtensions)
 				{
-					// If the file is .h, .m, .c, .cpp, .h, .hpp: open the file
-					// using xed. Otherwise, open the file with the Finder. We really don't
-					// know which IDE the user is running if it's not Xcode
-					// (when logging from Android, could be IntelliJ or Eclipse)
-					NSString *extension = [filename pathExtension];
-					BOOL useXcode = NO;
-                    //if ([fm fileExistsAtPath:@"/usr/bin/xed"])
-                    //{
-                    for (NSString *ext in sXcodeFileExtensions)
-                    {
-                        if ([ext caseInsensitiveCompare:extension] == NSOrderedSame)
-                        {
-                            useXcode = YES;
-                            break;
-                        }
-                    }
-                    //}
-					if (useXcode)
-					{                        
-                        [self xedFile:filename 
-                                 line:[NSString stringWithFormat:@"%d", MAX(0, msg.lineNumber)]
-                               client:[attachedConnection clientName]];
-					}
-					else
+					if ([ext caseInsensitiveCompare:extension] == NSOrderedSame)
 					{
-						[[NSWorkspace sharedWorkspace] openURL:[NSURL fileURLWithPath:filename]];
+						useXcode = YES;
+						break;
 					}
+				}
+				//}
+				if (useXcode)
+				{
+					[self xedFile:filename
+							 line:[NSString stringWithFormat:@"%d", MAX(0, msg.lineNumber)]
+						   client:[attachedConnection clientName]];
+				}
+				else
+				{
+					[[NSWorkspace sharedWorkspace] openURL:[NSURL fileURLWithPath:filename]];
 				}
 			}
 		}
-		return;
+	}
+}
+
+- (void)logCellDoubleClicked:(id)sender
+{
+    // double click opens the selection in the detail view
+	// command-double click opens the source file if it was defined in the log and the file is found (using alt can mess with the results of the AppleScript)
+	// alt-doubleclick opens the selection in external editor
+	NSEvent *event = [NSApp currentEvent];
+    if ([event clickCount] > 1 && ([NSEvent modifierFlags] & (NSFunctionKeyMask | NSCommandKeyMask)) != 0)
+    {
+		[self openDetailsInIDE];
+    }
+    else if ([event clickCount] > 1 && ([NSEvent modifierFlags] & NSAlternateKeyMask) != 0)
+    {
+        [self openDetailsInExternalEditor:sender];
+    }
+    else if ([event clickCount] > 1)
+    {
+        [self openDetailsWindow:sender];
 	}
 }
 
